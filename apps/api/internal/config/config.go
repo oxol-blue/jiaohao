@@ -14,6 +14,7 @@ type Config struct {
 	APIAddr            string
 	DatabaseURL        string
 	DatabaseSchema     string
+	RedisURL           string
 	JWTSecret          string
 	JWTTTL             time.Duration
 	AppTZ              string
@@ -34,6 +35,7 @@ func Load() (Config, error) {
 		APIAddr:            envOr("API_ADDR", ":8080"),
 		DatabaseURL:        strings.TrimSpace(os.Getenv("DATABASE_URL")),
 		DatabaseSchema:     envOr("DATABASE_SCHEMA", "jiaohao"),
+		RedisURL:           strings.TrimSpace(os.Getenv("REDIS_URL")),
 		JWTSecret:          strings.TrimSpace(os.Getenv("JWT_SECRET")),
 		AppTZ:              envOr("APP_TZ", "Asia/Shanghai"),
 		LogLevel:           strings.ToLower(envOr("LOG_LEVEL", "info")),

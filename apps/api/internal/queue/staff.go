@@ -246,3 +246,31 @@ func (s *Service) SetTakePaused(ctx context.Context, user identity.User, windowI
 	s.publishWindow(ctx, windowID.String())
 	return nil
 }
+
+func (s *Service) SetWindowStatus(ctx context.Context, user identity.User, windowID uuid.UUID, status string) error {
+	if status != "open" && status != "closed" {
+		return ErrWindowNotOpen
+	}
+	if err := s.requireStaffGrant(ctx, nil, user, windowID); err != nil {
+		return err
+	}
+	tag, err := s.pool.Exec(ctx, `
+		UPDATE windows SET status = $2, updated_at = now()
+		WHERE id = $1 AND status IN ('open', 'pause_take', 'closed')
+	`, windowID, status)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrWindowNotFound
+	}
+	s.log.Info("queue.window_status", map[string]any{
+		"request_id": httpx.RequestIDFrom(ctx),
+		"user_id":    user.ID.String(),
+		"window_id":  windowID.String(),
+		"status":     status,
+		"outcome":    "ok",
+	})
+	s.publishWindow(ctx, windowID.String())
+	return nil
+}

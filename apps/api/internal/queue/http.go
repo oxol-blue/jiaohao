@@ -135,6 +135,14 @@ func (h *Handler) ResumeTake(w http.ResponseWriter, r *http.Request) {
 	h.setPaused(w, r, false)
 }
 
+func (h *Handler) CloseWindow(w http.ResponseWriter, r *http.Request) {
+	h.setStatus(w, r, "closed")
+}
+
+func (h *Handler) OpenWindow(w http.ResponseWriter, r *http.Request) {
+	h.setStatus(w, r, "open")
+}
+
 func (h *Handler) IssueDisplayToken(w http.ResponseWriter, r *http.Request) {
 	user, ok := identity.UserFrom(r.Context())
 	if !ok {
@@ -209,6 +217,24 @@ func (h *Handler) setPaused(w http.ResponseWriter, r *http.Request, paused bool)
 		return
 	}
 	httpx.WriteOK(w, http.StatusOK, map[string]any{"paused": paused})
+}
+
+func (h *Handler) setStatus(w http.ResponseWriter, r *http.Request, status string) {
+	user, ok := identity.UserFrom(r.Context())
+	if !ok {
+		httpx.WriteError(w, http.StatusUnauthorized, httpx.CodeUnauthenticated, "请先登录")
+		return
+	}
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, httpx.CodeValidationError, "窗口 ID 不正确")
+		return
+	}
+	if err := h.svc.SetWindowStatus(r.Context(), user, id, status); err != nil {
+		h.writeErr(w, r, err)
+		return
+	}
+	httpx.WriteOK(w, http.StatusOK, map[string]any{"status": status})
 }
 
 func (h *Handler) writeErr(w http.ResponseWriter, r *http.Request, err error) {

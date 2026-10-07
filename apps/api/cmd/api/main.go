@@ -54,7 +54,17 @@ func main() {
 	}
 
 	hub := realtime.NewHub()
-	qs := queue.NewService(pool, loc, log, hub)
+	bus, err := realtime.NewBus(hub, cfg.RedisURL, log)
+	if err != nil {
+		log.Error("realtime.redis", map[string]any{"outcome": "error", "error": err.Error()})
+		os.Exit(1)
+	}
+	defer bus.Close()
+	bus.Start(ctx)
+	if bus.Enabled() {
+		log.Info("realtime.redis", map[string]any{"outcome": "ok"})
+	}
+	qs := queue.NewService(pool, loc, log, bus)
 	queue.StartAutoSkip(ctx, qs, log, time.Second)
 
 	srv := &http.Server{

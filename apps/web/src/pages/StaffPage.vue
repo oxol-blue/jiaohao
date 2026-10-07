@@ -102,6 +102,8 @@ onUnmounted(() => {
         <button type="button" class="ghost" @click="act(`/api/v1/windows/${w.id}/skip`)">过号</button>
         <button type="button" class="ghost" @click="act(`/api/v1/windows/${w.id}/pause-take`)">暂停取号</button>
         <button type="button" class="ghost" @click="act(`/api/v1/windows/${w.id}/resume-take`)">恢复取号</button>
+        <button type="button" class="ghost" @click="act(`/api/v1/windows/${w.id}/close`)">打烊</button>
+        <button type="button" class="ghost" @click="act(`/api/v1/windows/${w.id}/open`)">开始营业</button>
         <button type="button" class="ghost" @click="issueLink(w.id)">大屏链接</button>
         <button type="button" class="ghost" @click="revokeLink(w.id)">吊销大屏</button>
       </div>

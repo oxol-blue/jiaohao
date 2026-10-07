@@ -12,7 +12,7 @@
 
 ## 本地开发
 
-数据库使用**远程 PostgreSQL**，本仓库不安装、不启动本地数据库。
+数据库使用**远程 PostgreSQL**，本仓库不安装、不启动本地数据库。`REDIS_URL` 留空时只在本进程内广播；多实例时才填写已有 Redis，本仓库也不安装 Redis。
 
 1. 复制 `.env.example` 为 `.env`，填入 `DATABASE_URL` 与 `JWT_SECRET`。远端库若禁止在 `public` 建表，设置 `DATABASE_SCHEMA=jiaohao`。
 2. 迁移：
