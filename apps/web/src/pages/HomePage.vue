@@ -5,11 +5,10 @@ import { api, setToken } from "../api";
 
 const router = useRouter();
 const user = ref(null);
-const adminPing = ref("");
+const canteens = ref([]);
+const message = ref("");
 
 onMounted(async () => {
-  const cached = sessionStorage.getItem("jiaohao.user");
-  if (cached) user.value = JSON.parse(cached);
   const me = await api("/api/v1/me");
   if (!me.ok) {
     setToken("");
@@ -17,10 +16,12 @@ onMounted(async () => {
     return;
   }
   user.value = me.data;
-  const ping = await api("/api/v1/admin/ping");
-  adminPing.value = ping.ok
-    ? "管理员探测通过"
-    : `${ping.error?.code || ping.status} ${ping.error?.message || ""}`;
+  const list = await api("/api/v1/canteens");
+  if (!list.ok) {
+    message.value = list.error?.message || "无法加载食堂";
+    return;
+  }
+  canteens.value = list.data.items || [];
 });
 
 async function logout() {
@@ -34,8 +35,18 @@ async function logout() {
 <template>
   <section class="card" v-if="user">
     <p>已登录：{{ user.student_id }}（{{ user.role }}）</p>
-    <p class="muted">访问 /api/v1/admin/ping：{{ adminPing }}</p>
-    <p class="muted">窗口列表与取号将在后续阶段接入。</p>
-    <button type="button" @click="logout">退出</button>
+    <p class="muted">选择食堂查看窗口排队</p>
+    <button v-if="user.role === 'staff'" type="button" class="list-btn" @click="router.push('/staff')">员工叫号台</button>
+    <button
+      v-for="c in canteens"
+      :key="c.id"
+      type="button"
+      class="list-btn"
+      @click="router.push(`/canteens/${c.id}`)"
+    >
+      {{ c.name }}
+    </button>
+    <p v-if="message" class="error">{{ message }}</p>
+    <button type="button" class="ghost" @click="logout">退出</button>
   </section>
 </template>

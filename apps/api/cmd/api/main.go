@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"jiaohao/internal/canteen"
 	"jiaohao/internal/config"
 	"jiaohao/internal/db"
 	"jiaohao/internal/httpapi"
@@ -39,10 +40,20 @@ func main() {
 		log.Error("auth.seed", map[string]any{"outcome": "error", "error": err.Error()})
 		os.Exit(1)
 	}
+	if err := canteen.SeedDemo(ctx, canteen.NewStore(pool), cfg.SeedStaffStudentID, log); err != nil {
+		log.Error("canteen.seed", map[string]any{"outcome": "error", "error": err.Error()})
+		os.Exit(1)
+	}
+
+	loc, err := time.LoadLocation(cfg.AppTZ)
+	if err != nil {
+		log.Error("config.tz", map[string]any{"outcome": "error", "error": err.Error()})
+		os.Exit(1)
+	}
 
 	srv := &http.Server{
 		Addr:              cfg.APIAddr,
-		Handler:           httpapi.NewRouter(cfg, pool, log),
+		Handler:           httpapi.NewRouter(cfg, pool, loc, log),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,

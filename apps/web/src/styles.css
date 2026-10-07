@@ -64,3 +64,44 @@ button {
   color: #b91c1c;
   margin: 0;
 }
+
+.list-btn,
+.chip,
+.ghost {
+  background: #fff7ed;
+  color: #9a3412;
+  border: 1px solid #fdba74;
+}
+
+.ghost {
+  background: transparent;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip.on {
+  background: #c2410c;
+  color: #fff;
+  border-color: #c2410c;
+}
+
+.window {
+  border-top: 1px solid #f3e8d8;
+  padding-top: 12px;
+}
+
+.window h2 {
+  margin: 0 0 6px;
+  font-size: 1.1rem;
+}
+
+.mine {
+  background: #fff7ed;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 0;
+}
