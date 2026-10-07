@@ -1,0 +1,66 @@
+:root {
+  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  color: #1f2933;
+  background: #f4f1ea;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.shell {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+}
+
+.top h1 {
+  margin: 0 0 8px;
+  font-size: 1.6rem;
+}
+
+.muted {
+  color: #6b7280;
+  margin: 0 0 16px;
+}
+
+.card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px;
+  display: grid;
+  gap: 12px;
+  box-shadow: 0 8px 24px rgba(31, 41, 51, 0.08);
+}
+
+label {
+  display: grid;
+  gap: 6px;
+  font-size: 0.95rem;
+}
+
+input {
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 1rem;
+}
+
+button {
+  border: 0;
+  border-radius: 8px;
+  padding: 10px 14px;
+  background: #c2410c;
+  color: #fff;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.error {
+  color: #b91c1c;
+  margin: 0;
+}
