@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	"jiaohao/internal/config"
 )
@@ -106,7 +108,8 @@ func main() {
 	pass("delete-empty")
 	c.want("delete-used-window", http.MethodDelete, "/api/v1/admin/windows/"+w1, admin, nil, 409, "CONFLICT")
 
-	body := "student_id,display_name,role,password\n20269911,回归导入,diner,check-pass-1\n"
+	studentID := "9" + time.Now().Format("0102150405")
+	body := "student_id,display_name,role,password\n" + studentID + ",回归导入,diner,check-pass-1\n"
 	imported := c.sendRaw(http.MethodPost, "/api/v1/admin/users/import-file", admin, "text/csv", []byte(body))
 	if intNum(data(imported)["created"]) != 1 {
 		fail("csv-import", "没有新建账号")
@@ -115,14 +118,218 @@ func main() {
 	if intNum(data(again)["created"]) != 0 {
 		fail("csv-import", "重复导入不应新建")
 	}
-	c.login("20269911", "check-pass-1")
+	c.login(studentID, "check-pass-1")
 	pass("csv-import")
 
 	c.post("/api/v1/windows/"+w1+"/pause-take", staff, nil)
 	c.want("pause-take", http.MethodPost, "/api/v1/tickets", diner, map[string]string{"window_id": w1}, 409, "WINDOW_PAUSE_TAKE")
 	c.post("/api/v1/windows/"+w1+"/resume-take", staff, nil)
 	pass("pause-resume")
+
+	accept(c, diner, staff, admin, c1, c2, w1, studentID)
 	fmt.Println("check ok")
+}
+
+func accept(c *client, diner, staff, admin, c1, c2, w1, secondID string) {
+	other := ""
+	var otherBefore map[string]any
+	for _, item := range items(c.get("/api/v1/windows?canteen_id="+c2, diner)) {
+		other = str(item["id"])
+		otherBefore = item
+		break
+	}
+	if other == "" {
+		fail("isolation", "第二食堂没有窗口")
+	}
+
+	second := c.login(secondID, "check-pass-1")
+	releaseOwn(c, diner, staff, w1)
+	releaseOwn(c, second, staff, w1)
+	w := windowByID(c, diner, c1, w1)
+	if intNum(w["waiting_count"]) != 0 || intNum(w["current_number"]) != 0 {
+		fail("quiet-window", "W1 上有其他有效号，停止以免误叫")
+	}
+	pass("quiet-window")
+
+	taken := c.post("/api/v1/tickets", diner, map[string]string{"window_id": w1})
+	if intNum(data(taken)["people_ahead"]) != 0 {
+		restoreDemo(c, staff, admin, diner, w1)
+		fail("people-ahead", "第一位等待的人前面不应有人")
+	}
+	if intNum(windowByID(c, diner, c1, w1)["waiting_count"]) != 1 {
+		restoreDemo(c, staff, admin, diner, w1)
+		fail("waiting-count", "取号后等待人数不是 1")
+	}
+	behind := c.post("/api/v1/tickets", second, map[string]string{"window_id": w1})
+	if intNum(data(behind)["people_ahead"]) != 1 {
+		restoreDemo(c, staff, admin, diner, w1)
+		fail("people-ahead", "第二位前面应有 1 人")
+	}
+	if intNum(windowByID(c, diner, c1, w1)["waiting_count"]) != 2 {
+		restoreDemo(c, staff, admin, diner, w1)
+		fail("waiting-count", "两人等待时人数不是 2")
+	}
+	c.post("/api/v1/tickets/"+str(data(behind)["id"])+"/cancel", second, nil)
+	if intNum(windowByID(c, diner, c1, w1)["waiting_count"]) != 1 {
+		restoreDemo(c, staff, admin, diner, w1)
+		fail("waiting-count", "取消后等待人数没有减 1")
+	}
+	pass("waiting-count")
+	c.post("/api/v1/tickets/"+str(data(taken)["id"])+"/cancel", diner, nil)
+
+	skipped := takeThenSkip(c, diner, staff, w1)
+	if str(data(skipped)["status"]) != "skipped" {
+		restoreDemo(c, staff, admin, diner, w1)
+		fail("manual-skip", "状态不是 skipped")
+	}
+	if c.get("/api/v1/me/ticket", diner)["data"] != nil {
+		restoreDemo(c, staff, admin, diner, w1)
+		fail("manual-skip", "过号后仍有有效号")
+	}
+	again := c.post("/api/v1/tickets", diner, map[string]string{"window_id": w1})
+	if intNum(data(again)["number"]) != intNum(data(skipped)["number"])+1 {
+		restoreDemo(c, staff, admin, diner, w1)
+		fail("manual-skip", "过号后的新号没有递增")
+	}
+	c.post("/api/v1/tickets/"+str(data(again)["id"])+"/cancel", diner, nil)
+	pass("manual-skip")
+
+	held := c.post("/api/v1/tickets", diner, map[string]string{"window_id": w1})
+	c.post("/api/v1/windows/"+w1+"/close", staff, nil)
+	closed := windowByID(c, diner, c1, w1)
+	if str(closed["status"]) != "closed" || str(closed["id"]) == "" {
+		c.post("/api/v1/windows/"+w1+"/open", staff, nil)
+		restoreDemo(c, staff, admin, diner, w1)
+		fail("closed-visible", "打烊后列表里看不到该窗口")
+	}
+	c.post("/api/v1/tickets/"+str(data(held)["id"])+"/cancel", diner, nil)
+	denied := c.send(http.MethodPost, "/api/v1/tickets", diner, map[string]string{"window_id": w1})
+	if intNum(denied["_status"]) != 409 || errCode(denied) != "WINDOW_NOT_OPEN" {
+		c.post("/api/v1/windows/"+w1+"/open", staff, nil)
+		fail("closed-no-take", fmt.Sprintf("status=%v code=%s", denied["_status"], errCode(denied)))
+	}
+	c.post("/api/v1/windows/"+w1+"/open", staff, nil)
+	queued := c.post("/api/v1/tickets", diner, map[string]string{"window_id": w1})
+	c.post("/api/v1/windows/"+w1+"/close", staff, nil)
+	called := c.post("/api/v1/windows/"+w1+"/call-next", staff, nil)
+	c.post("/api/v1/windows/"+w1+"/open", staff, nil)
+	if str(data(called)["id"]) != str(data(queued)["id"]) || str(data(called)["status"]) != "called" {
+		restoreDemo(c, staff, admin, diner, w1)
+		fail("closed-call", "打烊后没有叫到当日等待号")
+	}
+	c.post("/api/v1/windows/"+w1+"/complete", staff, nil)
+	pass("closed-call")
+
+	issued := c.post("/api/v1/windows/"+w1+"/display-token", staff, nil)
+	token := str(data(issued)["token"])
+	if token == "" {
+		restoreDemo(c, staff, admin, diner, w1)
+		fail("display-token", "没有签发令牌")
+	}
+	view := c.get("/api/v1/display/windows/"+w1+"?token="+url.QueryEscape(token), "")
+	if intNum(view["_status"]) != 200 || str(data(view)["window_id"]) != w1 {
+		restoreDemo(c, staff, admin, diner, w1)
+		fail("display-token", "有效令牌读不到大屏")
+	}
+	wrong := c.get("/api/v1/display/windows/"+w1+"?token=not-this-token", "")
+	c.send(http.MethodDelete, "/api/v1/windows/"+w1+"/display-token", staff, nil)
+	if intNum(wrong["_status"]) != 401 || errCode(wrong) != "DISPLAY_TOKEN_INVALID" {
+		fail("display-wrong", fmt.Sprintf("status=%v code=%s", wrong["_status"], errCode(wrong)))
+	}
+	pass("display-wrong")
+	revoked := c.get("/api/v1/display/windows/"+w1+"?token="+url.QueryEscape(token), "")
+	if intNum(revoked["_status"]) != 401 || errCode(revoked) != "DISPLAY_TOKEN_INVALID" {
+		fail("display-revoke", fmt.Sprintf("status=%v code=%s", revoked["_status"], errCode(revoked)))
+	}
+	pass("display-revoke")
+
+	setTimeout(c, admin, w1, 2)
+	auto := c.post("/api/v1/tickets", diner, map[string]string{"window_id": w1})
+	c.post("/api/v1/windows/"+w1+"/call-next", staff, nil)
+	setTimeout(c, admin, w1, 0)
+	if !waitNoTicket(c, diner, 8*time.Second) {
+		restoreDemo(c, staff, admin, diner, w1)
+		fail("auto-skip", "2 秒过号配置到期后仍有有效号")
+	}
+	if intNum(data(auto)["number"]) == 0 {
+		fail("auto-skip", "没有取到号")
+	}
+	pass("auto-skip")
+
+	heldZero := c.post("/api/v1/tickets", diner, map[string]string{"window_id": w1})
+	c.post("/api/v1/windows/"+w1+"/call-next", staff, nil)
+	time.Sleep(3 * time.Second)
+	mine := c.get("/api/v1/me/ticket", diner)
+	if str(data(mine)["status"]) != "called" || str(data(mine)["id"]) != str(data(heldZero)["id"]) {
+		restoreDemo(c, staff, admin, diner, w1)
+		fail("no-auto-skip", "0 秒配置不应自动过号")
+	}
+	c.post("/api/v1/windows/"+w1+"/complete", staff, nil)
+	pass("no-auto-skip")
+
+	after := windowByID(c, diner, c2, other)
+	if intNum(after["current_number"]) != intNum(otherBefore["current_number"]) || intNum(after["waiting_count"]) != intNum(otherBefore["waiting_count"]) {
+		fail("isolation", "第一食堂叫号改变了第二食堂窗口")
+	}
+	pass("isolation")
+}
+
+func windowByID(c *client, token, canteenID, windowID string) map[string]any {
+	for _, item := range items(c.get("/api/v1/windows?canteen_id="+canteenID, token)) {
+		if str(item["id"]) == windowID {
+			return item
+		}
+	}
+	return map[string]any{}
+}
+
+func releaseOwn(c *client, diner, staff, windowID string) {
+	mine := c.get("/api/v1/me/ticket", diner)
+	ticket, _ := mine["data"].(map[string]any)
+	if ticket == nil {
+		return
+	}
+	switch str(ticket["status"]) {
+	case "waiting":
+		c.post("/api/v1/tickets/"+str(ticket["id"])+"/cancel", diner, nil)
+	case "called":
+		if str(ticket["window_id"]) == windowID {
+			c.post("/api/v1/windows/"+windowID+"/complete", staff, nil)
+		}
+	}
+}
+
+func takeThenSkip(c *client, diner, staff, windowID string) map[string]any {
+	c.post("/api/v1/tickets", diner, map[string]string{"window_id": windowID})
+	c.post("/api/v1/windows/"+windowID+"/call-next", staff, nil)
+	return c.post("/api/v1/windows/"+windowID+"/skip", staff, nil)
+}
+
+func setTimeout(c *client, admin, windowID string, seconds int) {
+	env := c.send(http.MethodPatch, "/api/v1/admin/windows/"+windowID, admin, map[string]any{"skip_timeout_seconds": seconds})
+	if intNum(env["_status"]) != 200 {
+		fail("skip-timeout", fmt.Sprintf("status=%v", env["_status"]))
+	}
+}
+
+func restoreDemo(c *client, staff, admin, diner, windowID string) {
+	c.post("/api/v1/windows/"+windowID+"/open", staff, nil)
+	setTimeout(c, admin, windowID, 0)
+	c.send(http.MethodDelete, "/api/v1/windows/"+windowID+"/display-token", staff, nil)
+	releaseOwn(c, diner, staff, windowID)
+}
+
+func waitNoTicket(c *client, diner string, limit time.Duration) bool {
+	deadline := time.Now().Add(limit)
+	for {
+		if c.get("/api/v1/me/ticket", diner)["data"] == nil {
+			return true
+		}
+		if time.Now().After(deadline) {
+			return false
+		}
+		time.Sleep(300 * time.Millisecond)
+	}
 }
 
 func clearActive(c *client, diner, staff, windowID string) {

@@ -22,3 +22,4 @@ Thumbs.db
 apps/api/tmp/
 apps/web/dist/
 apps/web/.vite/
+.opencode/
