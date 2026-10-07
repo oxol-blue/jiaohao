@@ -291,6 +291,8 @@ func APIStatus(err error) (int, string, string) {
 		return 409, httpx.CodeNoWaiting, "没有等待中的号码"
 	case errors.Is(err, ErrCalledPending):
 		return 409, httpx.CodeCalledPending, "请先完成或过号当前号码"
+	case errors.Is(err, ErrDisplayToken):
+		return 401, httpx.CodeDisplayTokenInvalid, "展示链接无效或已吊销"
 	default:
 		return 500, httpx.CodeInternal, "服务内部错误"
 	}

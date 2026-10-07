@@ -1,6 +1,7 @@
 package realtime
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -13,14 +14,19 @@ import (
 	"jiaohao/internal/logx"
 )
 
+type DisplayLookup interface {
+	WindowForDisplayToken(ctx context.Context, raw string) (string, bool)
+}
+
 type Handler struct {
 	hub      *Hub
 	identity *identity.Service
+	display  DisplayLookup
 	log      *logx.Logger
 	upgrader websocket.Upgrader
 }
 
-func NewHandler(hub *Hub, ids *identity.Service, origins []string, log *logx.Logger) *Handler {
+func NewHandler(hub *Hub, ids *identity.Service, display DisplayLookup, origins []string, log *logx.Logger) *Handler {
 	allowed := map[string]struct{}{}
 	for _, o := range origins {
 		allowed[o] = struct{}{}
@@ -28,6 +34,7 @@ func NewHandler(hub *Hub, ids *identity.Service, origins []string, log *logx.Log
 	return &Handler{
 		hub:      hub,
 		identity: ids,
+		display:  display,
 		log:      log,
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,
@@ -55,10 +62,16 @@ type inMsg struct {
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	user, err := h.identity.LoadSession(r.Context(), r.URL.Query().Get("token"))
+	raw := r.URL.Query().Get("token")
+	user, err := h.identity.LoadSession(r.Context(), raw)
+	displayWindow := ""
 	if err != nil {
-		httpx.WriteError(w, http.StatusUnauthorized, httpx.CodeUnauthenticated, "请先登录")
-		return
+		if id, ok := h.display.WindowForDisplayToken(r.Context(), raw); ok {
+			displayWindow = id
+		} else {
+			httpx.WriteError(w, http.StatusUnauthorized, httpx.CodeUnauthenticated, "请先登录")
+			return
+		}
 	}
 	conn, err := h.upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -66,9 +79,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	c := &client{
-		send:   make(chan []byte, 16),
-		topics: map[string]struct{}{},
-		userID: user.ID.String(),
+		send:          make(chan []byte, 16),
+		topics:        map[string]struct{}{},
+		userID:        user.ID.String(),
+		displayWindow: displayWindow,
 	}
 	h.hub.add(c)
 	defer func() {
@@ -107,7 +121,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		next := map[string]struct{}{}
 		for _, topic := range msg.Topics {
-			if mapped, ok := h.allowTopic(user, topic); ok {
+			if mapped, ok := h.allowTopic(c, user, topic); ok {
 				next[mapped] = struct{}{}
 			}
 		}
@@ -115,7 +129,13 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *Handler) allowTopic(user identity.User, topic string) (string, bool) {
+func (h *Handler) allowTopic(c *client, user identity.User, topic string) (string, bool) {
+	if c.displayWindow != "" {
+		if topic == "display:"+c.displayWindow {
+			return "window:" + c.displayWindow, true
+		}
+		return "", false
+	}
 	switch {
 	case topic == "ticket:mine":
 		return "ticket:" + user.ID.String(), true

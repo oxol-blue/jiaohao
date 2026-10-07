@@ -135,6 +135,64 @@ func (h *Handler) ResumeTake(w http.ResponseWriter, r *http.Request) {
 	h.setPaused(w, r, false)
 }
 
+func (h *Handler) IssueDisplayToken(w http.ResponseWriter, r *http.Request) {
+	user, ok := identity.UserFrom(r.Context())
+	if !ok {
+		httpx.WriteError(w, http.StatusUnauthorized, httpx.CodeUnauthenticated, "请先登录")
+		return
+	}
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, httpx.CodeValidationError, "窗口 ID 不正确")
+		return
+	}
+	token, err := h.svc.IssueDisplayToken(r.Context(), user, id)
+	if err != nil {
+		h.writeErr(w, r, err)
+		return
+	}
+	httpx.WriteOK(w, http.StatusOK, map[string]any{
+		"token": token,
+		"path":  "/display/" + id.String() + "?token=" + token,
+	})
+}
+
+func (h *Handler) RevokeDisplayToken(w http.ResponseWriter, r *http.Request) {
+	user, ok := identity.UserFrom(r.Context())
+	if !ok {
+		httpx.WriteError(w, http.StatusUnauthorized, httpx.CodeUnauthenticated, "请先登录")
+		return
+	}
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, httpx.CodeValidationError, "窗口 ID 不正确")
+		return
+	}
+	if err := h.svc.RevokeDisplayToken(r.Context(), user, id); err != nil {
+		h.writeErr(w, r, err)
+		return
+	}
+	httpx.WriteOK(w, http.StatusOK, map[string]any{"revoked": true})
+}
+
+func (h *Handler) Display(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadRequest, httpx.CodeValidationError, "窗口 ID 不正确")
+		return
+	}
+	token := r.URL.Query().Get("token")
+	if token == "" {
+		token = r.Header.Get("X-Display-Token")
+	}
+	view, err := h.svc.DisplayView(r.Context(), id, token)
+	if err != nil {
+		h.writeErr(w, r, err)
+		return
+	}
+	httpx.WriteOK(w, http.StatusOK, view)
+}
+
 func (h *Handler) setPaused(w http.ResponseWriter, r *http.Request, paused bool) {
 	user, ok := identity.UserFrom(r.Context())
 	if !ok {

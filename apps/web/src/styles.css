@@ -105,3 +105,32 @@ button {
   padding: 10px 12px;
   margin: 0;
 }
+
+.display {
+  min-height: 100vh;
+  background: #111827;
+  color: #f9fafb;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.display-name {
+  margin: 0;
+  font-size: 2rem;
+}
+
+.display-number {
+  margin: 0;
+  font-size: 8rem;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.display-wait {
+  margin: 0;
+  font-size: 1.5rem;
+  color: #d1d5db;
+}

@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"jiaohao/internal/canteen"
 	"jiaohao/internal/logx"
 )
 
@@ -48,6 +49,45 @@ func (s *Service) AutoSkipDue(ctx context.Context) (int, error) {
 	return len(ids), nil
 }
 
+func (s *Service) ExpirePreviousDays(ctx context.Context) (int, error) {
+	day := canteen.BusinessDate(time.Now(), s.loc)
+	rows, err := s.pool.Query(ctx, `
+		UPDATE tickets
+		SET status = 'expired', finished_at = now()
+		WHERE status IN ('waiting', 'called')
+		  AND business_date < $1
+		RETURNING id
+	`, day)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+	ids := make([]uuid.UUID, 0)
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return 0, err
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	for _, id := range ids {
+		ticket, err := s.GetByID(ctx, id)
+		if err != nil {
+			continue
+		}
+		s.log.Info("queue.expire", map[string]any{
+			"ticket_id": ticket.ID,
+			"window_id": ticket.WindowID,
+			"outcome":   "ok",
+		})
+		s.publishTicket(ctx, ticket, "")
+	}
+	return len(ids), nil
+}
+
 func StartAutoSkip(ctx context.Context, svc *Service, log *logx.Logger, every time.Duration) {
 	if every <= 0 {
 		every = time.Second
@@ -67,6 +107,14 @@ func StartAutoSkip(ctx context.Context, svc *Service, log *logx.Logger, every ti
 				}
 				if n > 0 {
 					log.Info("queue.auto_skip_batch", map[string]any{"count": n, "outcome": "ok"})
+				}
+				expired, err := svc.ExpirePreviousDays(ctx)
+				if err != nil {
+					log.Error("queue.expire", map[string]any{"outcome": "error", "error": err.Error()})
+					continue
+				}
+				if expired > 0 {
+					log.Info("queue.expire_batch", map[string]any{"count": expired, "outcome": "ok"})
 				}
 			}
 		}

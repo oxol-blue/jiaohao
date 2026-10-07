@@ -13,9 +13,10 @@ type Envelope struct {
 type Message map[string]any
 
 type client struct {
-	send   chan []byte
-	topics map[string]struct{}
-	userID string
+	send          chan []byte
+	topics        map[string]struct{}
+	userID        string
+	displayWindow string
 }
 
 type Hub struct {

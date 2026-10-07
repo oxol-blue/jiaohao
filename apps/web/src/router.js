@@ -4,6 +4,7 @@ import HomePage from "./pages/HomePage.vue";
 import CanteenPage from "./pages/CanteenPage.vue";
 import StaffPage from "./pages/StaffPage.vue";
 import AdminPage from "./pages/AdminPage.vue";
+import DisplayPage from "./pages/DisplayPage.vue";
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -13,5 +14,6 @@ export const router = createRouter({
     { path: "/canteens/:id", component: CanteenPage },
     { path: "/staff", component: StaffPage },
     { path: "/admin", component: AdminPage },
+    { path: "/display/:id", component: DisplayPage },
   ],
 });

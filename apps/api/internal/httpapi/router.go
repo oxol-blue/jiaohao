@@ -23,7 +23,7 @@ func NewRouter(cfg config.Config, pool *pgxpool.Pool, loc *time.Location, log *l
 	idHandler := identity.NewHandler(svc, log)
 	canteenHandler := canteen.NewHandler(canteen.NewStore(pool), loc, log)
 	queueHandler := queue.NewHandler(qs, log)
-	wsHandler := realtime.NewHandler(hub, svc, cfg.CORSOrigins, log)
+	wsHandler := realtime.NewHandler(hub, svc, qs, cfg.CORSOrigins, log)
 	adminHandler := admin.NewHandler(pool, log)
 
 	r := chi.NewRouter()
@@ -50,6 +50,7 @@ func NewRouter(cfg config.Config, pool *pgxpool.Pool, loc *time.Location, log *l
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Post("/auth/login", idHandler.Login)
 		r.Get("/ws", wsHandler.ServeHTTP)
+		r.Get("/display/windows/{id}", queueHandler.Display)
 
 		r.Group(func(r chi.Router) {
 			r.Use(idHandler.Auth)
@@ -67,6 +68,8 @@ func NewRouter(cfg config.Config, pool *pgxpool.Pool, loc *time.Location, log *l
 			r.Post("/windows/{id}/skip", queueHandler.Skip)
 			r.Post("/windows/{id}/pause-take", queueHandler.PauseTake)
 			r.Post("/windows/{id}/resume-take", queueHandler.ResumeTake)
+			r.Post("/windows/{id}/display-token", queueHandler.IssueDisplayToken)
+			r.Delete("/windows/{id}/display-token", queueHandler.RevokeDisplayToken)
 			r.With(idHandler.RequireRole(identity.RoleAdmin)).Get("/admin/ping", idHandler.AdminPing)
 			r.With(idHandler.RequireRole(identity.RoleAdmin)).Patch("/admin/windows/{id}", adminHandler.PatchWindow)
 			r.With(idHandler.RequireRole(identity.RoleAdmin)).Post("/admin/canteens", adminHandler.CreateCanteen)
