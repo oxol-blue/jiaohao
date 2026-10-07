@@ -54,7 +54,7 @@ npm run dev
 ## 常用命令
 
 ```powershell
-# 回滚最近一批迁移（会删表，仅开发库）
+# 回滚最近一批迁移会删表。不要对这套共享远程库执行。
 cd apps/api
 go run ./cmd/migrate down
 
@@ -62,6 +62,37 @@ go run ./cmd/migrate down
 cd apps/api
 go test ./...
 ```
+
+构建：
+
+```powershell
+cd apps/api
+go build -o ../../bin/api.exe ./cmd/api
+cd ../web
+npm run build
+```
+
+功能回归（API 需已在 127.0.0.1:8080，不打印密码或令牌）：
+
+```powershell
+cd apps/api
+go run ./cmd/check
+go run ./cmd/wsload -n 5
+```
+
+超过 100 路连接会被拒绝。2000–3000 的压测需要另一次授权，不要把 `ALLOW_STRESS=1` 当成已经批准。
+
+## 备份与回滚
+
+数据库在远程 PostgreSQL，不要在这台机器安装数据库。备份使用本机 `.env` 里的 `DATABASE_URL`，不要把连接串写进命令历史之外的文件：
+
+```powershell
+pg_dump --schema=jiaohao --file=jiaohao-backup.sql "$env:DATABASE_URL"
+```
+
+回滚程序是换回上一版 API 和 Web 构建。回滚数据库会丢掉备份之后的取号，只有明确要恢复快照时才做。不要对这套共享库运行 `migrate down`。单实例不依赖 Redis；Redis 只在以后多实例推送时需要。
+
+演示步骤见 [`docs/DEMO.md`](docs/DEMO.md)。
 
 ## 安全
 

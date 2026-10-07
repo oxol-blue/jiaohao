@@ -77,6 +77,12 @@ func NewRouter(cfg config.Config, pool *pgxpool.Pool, loc *time.Location, log *l
 			r.With(idHandler.RequireRole(identity.RoleAdmin)).Post("/admin/windows", adminHandler.CreateWindow)
 			r.With(idHandler.RequireRole(identity.RoleAdmin)).Post("/admin/grants", adminHandler.Grant)
 			r.With(idHandler.RequireRole(identity.RoleAdmin)).Post("/admin/users/import", adminHandler.ImportUsers)
+			r.With(idHandler.RequireRole(identity.RoleAdmin)).Post("/admin/users/import-file", adminHandler.ImportUsersFile)
+			r.With(idHandler.RequireRole(identity.RoleAdmin)).Patch("/admin/canteens/{id}", adminHandler.RenameCanteen)
+			r.With(idHandler.RequireRole(identity.RoleAdmin)).Delete("/admin/canteens/{id}", adminHandler.DeleteCanteen)
+			r.With(idHandler.RequireRole(identity.RoleAdmin)).Patch("/admin/floors/{id}", adminHandler.RenameFloor)
+			r.With(idHandler.RequireRole(identity.RoleAdmin)).Delete("/admin/floors/{id}", adminHandler.DeleteFloor)
+			r.With(idHandler.RequireRole(identity.RoleAdmin)).Delete("/admin/windows/{id}", adminHandler.DeleteWindow)
 		})
 	})
 
