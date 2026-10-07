@@ -37,6 +37,7 @@ async function logout() {
     <p>已登录：{{ user.student_id }}（{{ user.role }}）</p>
     <p class="muted">选择食堂查看窗口排队</p>
     <button v-if="user.role === 'staff'" type="button" class="list-btn" @click="router.push('/staff')">员工叫号台</button>
+    <button v-if="user.role === 'admin'" type="button" class="list-btn" @click="router.push('/admin')">管理</button>
     <button
       v-for="c in canteens"
       :key="c.id"

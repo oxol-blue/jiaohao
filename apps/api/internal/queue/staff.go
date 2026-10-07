@@ -135,15 +135,14 @@ func (s *Service) CallNext(ctx context.Context, user identity.User, windowID uui
 	}
 
 	announcementID := uuid.NewString()
-	var skipAfter any
-	if timeout > 0 {
-		skipAfter = time.Now().Add(time.Duration(timeout) * time.Second)
-	}
 	if _, err := tx.Exec(ctx, `
 		UPDATE tickets
-		SET status = 'called', called_at = now(), skip_after = $2, announcement_id = $3
+		SET status = 'called',
+		    called_at = now(),
+		    skip_after = CASE WHEN $2::int > 0 THEN now() + make_interval(secs => $2::int) ELSE NULL END,
+		    announcement_id = $3
 		WHERE id = $1 AND status = 'waiting'
-	`, ticketID, skipAfter, announcementID); err != nil {
+	`, ticketID, timeout, announcementID); err != nil {
 		return Ticket{}, err
 	}
 	if err := tx.Commit(ctx); err != nil {

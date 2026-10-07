@@ -7,6 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"jiaohao/internal/admin"
 	"jiaohao/internal/canteen"
 	"jiaohao/internal/config"
 	"jiaohao/internal/httpx"
@@ -16,14 +17,14 @@ import (
 	"jiaohao/internal/realtime"
 )
 
-func NewRouter(cfg config.Config, pool *pgxpool.Pool, loc *time.Location, log *logx.Logger) http.Handler {
+func NewRouter(cfg config.Config, pool *pgxpool.Pool, loc *time.Location, log *logx.Logger, qs *queue.Service, hub *realtime.Hub) http.Handler {
 	store := identity.NewStore(pool)
 	svc := identity.NewService(store, cfg.JWTSecret, cfg.JWTTTL, log)
 	idHandler := identity.NewHandler(svc, log)
-	hub := realtime.NewHub()
 	canteenHandler := canteen.NewHandler(canteen.NewStore(pool), loc, log)
-	queueHandler := queue.NewHandler(queue.NewService(pool, loc, log, hub), log)
+	queueHandler := queue.NewHandler(qs, log)
 	wsHandler := realtime.NewHandler(hub, svc, cfg.CORSOrigins, log)
+	adminHandler := admin.NewHandler(pool, log)
 
 	r := chi.NewRouter()
 	r.Use(httpx.RequestID)
@@ -67,6 +68,12 @@ func NewRouter(cfg config.Config, pool *pgxpool.Pool, loc *time.Location, log *l
 			r.Post("/windows/{id}/pause-take", queueHandler.PauseTake)
 			r.Post("/windows/{id}/resume-take", queueHandler.ResumeTake)
 			r.With(idHandler.RequireRole(identity.RoleAdmin)).Get("/admin/ping", idHandler.AdminPing)
+			r.With(idHandler.RequireRole(identity.RoleAdmin)).Patch("/admin/windows/{id}", adminHandler.PatchWindow)
+			r.With(idHandler.RequireRole(identity.RoleAdmin)).Post("/admin/canteens", adminHandler.CreateCanteen)
+			r.With(idHandler.RequireRole(identity.RoleAdmin)).Post("/admin/canteens/{id}/floors", adminHandler.CreateFloor)
+			r.With(idHandler.RequireRole(identity.RoleAdmin)).Post("/admin/windows", adminHandler.CreateWindow)
+			r.With(idHandler.RequireRole(identity.RoleAdmin)).Post("/admin/grants", adminHandler.Grant)
+			r.With(idHandler.RequireRole(identity.RoleAdmin)).Post("/admin/users/import", adminHandler.ImportUsers)
 		})
 	})
 

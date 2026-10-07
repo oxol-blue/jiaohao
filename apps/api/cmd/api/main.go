@@ -15,6 +15,8 @@ import (
 	"jiaohao/internal/httpapi"
 	"jiaohao/internal/identity"
 	"jiaohao/internal/logx"
+	"jiaohao/internal/queue"
+	"jiaohao/internal/realtime"
 )
 
 func main() {
@@ -51,9 +53,13 @@ func main() {
 		os.Exit(1)
 	}
 
+	hub := realtime.NewHub()
+	qs := queue.NewService(pool, loc, log, hub)
+	queue.StartAutoSkip(ctx, qs, log, time.Second)
+
 	srv := &http.Server{
 		Addr:              cfg.APIAddr,
-		Handler:           httpapi.NewRouter(cfg, pool, loc, log),
+		Handler:           httpapi.NewRouter(cfg, pool, loc, log, qs, hub),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,
